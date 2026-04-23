@@ -1,7 +1,7 @@
 # Capsule Skills Test Report
 
 **Date:** 2026-04-22
-**Account tested:** m3test@gmail.com
+**Account tested:** <>
 **Tested by:** Claude Code (automated)
 
 ---
