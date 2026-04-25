@@ -5,71 +5,28 @@ argument-hint: [query] [--tag <tag>] [--private] [--team <team_id>] [--featured]
 allowed-tools: Bash
 ---
 
-## Auth state
 !`[ -f ~/.capsule_session_jwt ] && echo "AUTH: ok" || echo "AUTH: missing — run /capsule-login first"`
+**Stop if AUTH missing.** Default `--limit` is 20.
 
-**Stop immediately if AUTH is missing.**
+**Header shortcuts used below:**
+- `[AUTH]` = `-H "Authorization: Bearer $(cat ~/.capsule_session_jwt)" -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"`
+- `[CT]` = `-H "Content-Type: application/json"` (add for POST)
 
----
+## Endpoints
 
-## Modes
-
-Parse the user's arguments to pick the right mode. Default `--limit` is 20.
-
-| Arguments | Endpoint |
+| Mode | curl |
 |---|---|
-| `--private` | `GET /capsules/private` |
-| `--team <id>` | `GET /capsules/team/<id>` |
-| `--featured` | `GET /capsules/featured` (no auth header needed) |
-| plain text / `--tag` | `POST /capsules/search` |
-| no arguments | `POST /capsules/search` with empty body |
+| `--private` | `curl -s "$CAPSULE_API_BASE/capsules/private?limit=L&offset=0" [AUTH]` |
+| `--team <id>` | `curl -s "$CAPSULE_API_BASE/capsules/team/ID?limit=L&offset=0" [AUTH]` |
+| `--featured` | `curl -s "$CAPSULE_API_BASE/capsules/featured?limit=L&offset=0"` (no auth) |
+| text / `--tag` / no args | `curl -s -X POST "$CAPSULE_API_BASE/capsules/search" [AUTH] [CT] -d '{"summary_query":Q_OR_NULL,"tag":T_OR_NULL,"limit":L,"offset":0}'` |
 
----
-
-## Commands
-
-**Private capsules:**
-```bash
-curl -s "$CAPSULE_API_BASE/capsules/private?limit=LIMIT&offset=0" \
-  -H "Authorization: Bearer $(cat ~/.capsule_session_jwt)" \
-  -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-```
-
-**Team capsules** (replace TEAM_ID):
-```bash
-curl -s "$CAPSULE_API_BASE/capsules/team/TEAM_ID?limit=LIMIT&offset=0" \
-  -H "Authorization: Bearer $(cat ~/.capsule_session_jwt)" \
-  -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-```
-
-**Featured capsules:**
-```bash
-curl -s "$CAPSULE_API_BASE/capsules/featured?limit=LIMIT&offset=0" \
-  -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-```
-
-**Search** (replace values; set fields to `null` if not provided):
-```bash
-curl -s -X POST "$CAPSULE_API_BASE/capsules/search" \
-  -H "Authorization: Bearer $(cat ~/.capsule_session_jwt)" \
-  -H "Content-Type: application/json" \
-  -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-  -d '{"summary_query": QUERY_OR_NULL, "tag": TAG_OR_NULL, "limit": LIMIT, "offset": 0}'
-```
-
----
-
-## Output format
-
-Parse the JSON response. For each result in `results`, display:
+## Output
+Per result in `results[]`:
 ```
 [<capsule_id>] <tag or "(no tag)"> — v<version_count> — <attachment_count> attachment(s)
-  <summary (first 120 chars)>
+  <summary[:120]>
 ```
+Footer: `Total: <total> result(s). Use /capsule-read <id> to inspect one.`
 
-Then show: `Total: <total> result(s). Use /capsule-read <id> to inspect one.`
-
-**Error handling:**
-- `401` → token expired — tell user to run `/capsule-login`
-- `403` → not a member of that team
-- `404` → no results found
+Errors: `401` re-login | `403` not a team member | `404` no results

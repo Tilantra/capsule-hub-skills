@@ -5,129 +5,68 @@ argument-hint: <capsule_id> [--new-version] [--rollback <version_id>] [--tag <ne
 allowed-tools: Bash
 ---
 
-## Auth state
 !`[ -f ~/.capsule_session_jwt ] && echo "AUTH: ok" || echo "AUTH: missing — run /capsule-login first"`
+**Stop if AUTH missing.** First positional arg is always `capsule_id`.
 
-**Stop immediately if AUTH is missing.**
-The first positional argument is always the `capsule_id`.
+**Header shortcuts used below:**
+- `[AUTH]` = `-H "Authorization: Bearer $(cat ~/.capsule_session_jwt)" -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"`
+- `[CT]` = `-H "Content-Type: application/json"` (add for POST/PUT)
 
 ---
 
-## Operations
+### `--new-version`
 
-### `--new-version` — Add a new version
-
-Follows the same two-phase flow as `/capsule-save`.
-
-**Phase 1 — Upload new attachments** (only if `--attach` is also provided):
-
-For each file, base64-encode and upload:
+**Phase 1** (only if `--attach`): Upload each file (MIME map same as `/capsule-save`):
 ```bash
-B64=$(base64 < "FILEPATH") && \
-curl -s -X POST "$CAPSULE_API_BASE/capsules/attachments" \
-  -H "Authorization: Bearer $(cat ~/.capsule_session_jwt)" \
-  -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-  -H "Content-Type: application/json" \
-  -d "{\"base64_data\":\"$B64\",\"filename\":\"FILENAME\",\"content_type\":\"MIME_TYPE\"}"
+B64=$(base64 < "FILEPATH") && curl -s -X POST "$CAPSULE_API_BASE/capsules/attachments" \
+  [AUTH] [CT] -d "{\"base64_data\":\"$B64\",\"filename\":\"FILENAME\",\"content_type\":\"MIME_TYPE\"}"
 ```
-Collect returned `asset_id` values.
+Collect `asset_id` values.
 
-**Phase 2 — Create the version:**
+**Phase 2**: Create version:
 ```bash
-curl -s -X POST "$CAPSULE_API_BASE/capsules/CAPSULE_ID/versions" \
-  -H "Authorization: Bearer $(cat ~/.capsule_session_jwt)" \
-  -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "extracted_from": "claude-code",
-    "attachment_ids": [ASSET_IDS_ARRAY],
-    "content": {
-      "messages": MESSAGES_ARRAY,
-      "attachments": [],
-      "metadata": {}
-    }
-  }'
+curl -s -X POST "$CAPSULE_API_BASE/capsules/CAPSULE_ID/versions" [AUTH] [CT] -d '{
+  "extracted_from":"claude-code","attachment_ids":[ASSET_IDS_OR_EMPTY],
+  "content":{"messages":MESSAGES_ARRAY,"attachments":[],"metadata":{}}
+}'
 ```
-
 Display: `New version <version_id> created. Parent: <parent_version_id>.`
-Note: the response contains `capsule_id`, `version_id`, `content_hash`, `parent_version_id`, and `extracted_from` — it does NOT include `version_number`.
+Response fields: `capsule_id`, `version_id`, `content_hash`, `parent_version_id`, `extracted_from` — no `version_number`.
 
 ---
 
-### `--rollback <version_id>` — Roll back to a prior version
-
+### `--rollback <version_id>`
 ```bash
-curl -s -X POST "$CAPSULE_API_BASE/capsules/CAPSULE_ID/rollback" \
-  -H "Authorization: Bearer $(cat ~/.capsule_session_jwt)" \
-  -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-  -H "Content-Type: application/json" \
-  -d '{"version_id": "TARGET_VERSION_ID"}'
+curl -s -X POST "$CAPSULE_API_BASE/capsules/CAPSULE_ID/rollback" [AUTH] [CT] -d '{"version_id":"TARGET_VERSION_ID"}'
 ```
+Display rollback confirmation with new active version.
 
-Display: rollback confirmation with new active version number and summary.
-
----
-
-### `--tag <new_tag>` — Rename the capsule tag
-
+### `--tag <new_tag>`
 ```bash
-curl -s -X PUT "$CAPSULE_API_BASE/capsules/CAPSULE_ID/tag" \
-  -H "Authorization: Bearer $(cat ~/.capsule_session_jwt)" \
-  -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-  -H "Content-Type: application/json" \
-  -d '{"tag": "NEW_TAG"}'
+curl -s -X PUT "$CAPSULE_API_BASE/capsules/CAPSULE_ID/tag" [AUTH] [CT] -d '{"tag":"NEW_TAG"}'
 ```
-
 Display: `Tag updated to "<new_tag>".`
 
----
-
-### `--team <team_id>` — Share capsule with a team
-
-**Note:** This is a one-way operation. A private capsule can be moved to a team, but cannot be reassigned to a different team afterwards.
-
+### `--team <team_id>`
+One-way only — private→team, no reassignment afterwards.
 ```bash
-curl -s -X PUT "$CAPSULE_API_BASE/capsules/CAPSULE_ID/team" \
-  -H "Authorization: Bearer $(cat ~/.capsule_session_jwt)" \
-  -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-  -H "Content-Type: application/json" \
-  -d '{"team": "TEAM_ID"}'
+curl -s -X PUT "$CAPSULE_API_BASE/capsules/CAPSULE_ID/team" [AUTH] [CT] -d '{"team":"TEAM_ID"}'
 ```
-
 Display: `Capsule shared with team <team_id>.`
 
----
-
-### `--rm-attachment <asset_id>` — Remove an attachment
-
+### `--rm-attachment <asset_id>`
 ```bash
-curl -s -X DELETE "$CAPSULE_API_BASE/capsules/CAPSULE_ID/attachments/ASSET_ID" \
-  -H "Authorization: Bearer $(cat ~/.capsule_session_jwt)" \
-  -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+curl -s -X DELETE "$CAPSULE_API_BASE/capsules/CAPSULE_ID/attachments/ASSET_ID" [AUTH]
 ```
-
 Display: `Attachment <asset_id> removed.`
 
----
-
-### `--delete` — Delete the entire capsule
-
-**Before running**, confirm with the user: "This will permanently delete capsule `<capsule_id>` and all its versions. Type 'yes' to confirm."
-
-Only proceed if the user confirms.
-
+### `--delete`
+Confirm first: "This will permanently delete capsule `<capsule_id>` and all its versions. Type 'yes' to confirm." Only proceed on confirmation.
 ```bash
-curl -s -X DELETE "$CAPSULE_API_BASE/capsules/CAPSULE_ID" \
-  -H "Authorization: Bearer $(cat ~/.capsule_session_jwt)" \
-  -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+curl -s -X DELETE "$CAPSULE_API_BASE/capsules/CAPSULE_ID" [AUTH]
 ```
-
 Display: `Capsule <capsule_id> and all versions deleted.`
 
 ---
 
-## Error handling
-- `401` → token expired — run `/capsule-login`
-- `403` → tier restriction (e.g., cannot version a capsule created by a higher-tier user)
-- `404` → capsule or version not found, or no access
-- `400` with "already has a team" → capsule already belongs to a team; team reassignment is not allowed
+Errors: `401` re-login | `403` tier restriction | `404` not found | `400` "already has a team" → no reassignment
